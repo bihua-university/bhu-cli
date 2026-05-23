@@ -11,6 +11,8 @@ Only write entries that are worth mentioning to users.
 
 ## Unreleased
 
+## 1.45.0 (2026-05-22)
+
 - Core: Add default hook support to HookEngine — when `rtk` is installed, a PreToolUse hook is auto-registered to rewrite Shell commands via RTK before execution
 - Core: Allow PreToolUse hooks to modify tool input parameters via `updatedInput` — aggregated rewrites from multiple hooks are applied to the tool call so downstream tools receive the updated arguments
 
