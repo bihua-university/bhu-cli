@@ -11,6 +11,10 @@ Only write entries that are worth mentioning to users.
 
 ## Unreleased
 
+## 1.46.0 (2026-05-22)
+
+- CI: Restore unsigned binary builds in release workflow — removed macOS code signing and notarization steps (no Apple Developer ID certificates configured in this fork) while keeping onefile/onedir binary builds and GitHub Release publishing for all platforms
+
 ## 1.45.0 (2026-05-22)
 
 - Core: Add default hook support to HookEngine — when `rtk` is installed, a PreToolUse hook is auto-registered to rewrite Shell commands via RTK before execution
