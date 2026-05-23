@@ -7,6 +7,7 @@
 - Core：为 HookEngine 新增默认 hook 支持——当系统安装了 `rtk` 时，自动注册一个 PreToolUse hook，在执行前通过 RTK 重写 Shell 命令
 - Core：允许 PreToolUse hook 通过 `updatedInput` 修改工具输入参数——来自多个 hook 的重写结果会被聚合并应用到工具调用，下游工具将接收到更新后的参数
 - Core：修复 RTK 默认 hook 将退出码 3 误判为失败的问题——真实的 rtk 二进制文件在成功重写命令时返回退出码 3（而非文档所述的 0）；此前任何非零退出码都被视为失败，导致 hook 静默跳过重写
+- Tool：新增 `EditFile` 工具，支持基于行范围编辑文件——删除指定区间的行并在目标位置插入替换文本，自带 diff 预览与审批流程
 
 ## 1.44.0 (2026-05-13)
 
