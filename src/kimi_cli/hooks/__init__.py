@@ -16,7 +16,7 @@ def get_default_hooks() -> list[HookDef]:
         hooks.append(
             HookDef(
                 event="PreToolUse",
-                matcher="^(Shell|Bash)$",
+                matcher="Shell",
                 command=f"{sys.executable} {rtk_path}",
                 timeout=5,
             )

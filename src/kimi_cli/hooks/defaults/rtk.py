@@ -9,7 +9,7 @@ import sys
 def main() -> None:
     data = json.load(sys.stdin)
     tool_name = data.get("tool_name", "")
-    if tool_name != "Bash":
+    if tool_name != "Shell":
         sys.exit(0)
 
     cmd = data.get("tool_input", {}).get("command", "")
