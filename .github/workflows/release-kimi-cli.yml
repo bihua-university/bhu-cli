@@ -474,6 +474,8 @@ jobs:
     name: Publish Python package
     needs: [validate, release]
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write
     env:
       KIMI_WEB_STRICT_VERSION: "1"
       KIMI_WEB_EXPECT_VERSION: ${{ github.ref_name }}
@@ -499,12 +501,15 @@ jobs:
           cache: "npm"
           cache-dependency-path: web/package-lock.json
 
+      - name: Override package name for fork release
+        run: sed -i 's/^name = "kimi-cli"/name = "bhu-cli"/' pyproject.toml
+
       - name: Build distributions
-        run: make build-kimi-cli
+        run: |
+          uv run scripts/inject_build_sha.py
+          uv build --package kimi-cli --no-sources --out-dir dist
 
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
-          user: __token__
-          password: ${{ secrets.PYPI_API_TOKEN }}
           packages-dir: dist
