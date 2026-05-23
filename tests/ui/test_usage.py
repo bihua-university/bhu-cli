@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pytest
+from inline_snapshot import snapshot
 from rich.console import Console
 from rich.segment import Segment
 
@@ -103,7 +104,7 @@ def test_format_row_handles_no_remaining_quota(used: int, limit: int) -> None:
     assert "0% left" in _plain_text(segments)
     bar_segments = _filled_bar_segments(segments)
     colored_segments = [s for s in bar_segments if str(s.style) not in ("grey23", "grey50")]
-    assert colored_segments == []
+    assert colored_segments == snapshot([])
 
 
 def test_format_row_renders_reset_hint() -> None:
@@ -114,9 +115,9 @@ def test_format_row_renders_reset_hint() -> None:
 
 @pytest.mark.parametrize("value", ["42", 42, 42.0])
 def test_to_int_accepts_integer_values(value: object) -> None:
-    assert _to_int(value) == 42
+    assert _to_int(value) == snapshot(42)
 
 
 @pytest.mark.parametrize("value", [None, "unknown", float("nan"), float("inf"), float("-inf")])
 def test_to_int_rejects_invalid_values(value: object) -> None:
-    assert _to_int(value) is None
+    assert _to_int(value) == snapshot(None)
