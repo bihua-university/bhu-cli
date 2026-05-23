@@ -159,6 +159,7 @@ def test_pyinstaller_hiddenimports():
             "kimi_cli.tools.display",
             "kimi_cli.tools.dmail",
             "kimi_cli.tools.file",
+            "kimi_cli.tools.file.edit",
             "kimi_cli.tools.file.glob",
             "kimi_cli.tools.file.grep_local",
             "kimi_cli.tools.file.plan_mode",
