@@ -4,6 +4,9 @@
 
 ## 未发布
 
+- Core：为 HookEngine 新增默认 hook 支持——当系统安装了 `rtk` 时，自动注册一个 PreToolUse hook，在执行前通过 RTK 重写 Shell 命令
+- Core：允许 PreToolUse hook 通过 `updatedInput` 修改工具输入参数——来自多个 hook 的重写结果会被聚合并应用到工具调用，下游工具将接收到更新后的参数
+
 ## 1.44.0 (2026-05-13)
 
 - Shell：新增斜杠命令别名解析——别名（如 `/h`、`?`、`status`）现在能正确解析到对应的正式命令（`/help`、`/usage`）；补全器和帮助输出会将别名匹配项显示为 `/name (alias)`，方便识别

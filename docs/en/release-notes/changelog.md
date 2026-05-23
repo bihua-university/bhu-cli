@@ -4,6 +4,9 @@ This page documents the changes in each Kimi Code CLI release.
 
 ## Unreleased
 
+- Core: Add default hook support to HookEngine — when `rtk` is installed, a PreToolUse hook is auto-registered to rewrite Shell commands via RTK before execution
+- Core: Allow PreToolUse hooks to modify tool input parameters via `updatedInput` — aggregated rewrites from multiple hooks are applied to the tool call so downstream tools receive the updated arguments
+
 ## 1.44.0 (2026-05-13)
 
 - Shell: Add slash command alias resolution — aliases such as `/h`, `?`, and `status` now resolve to their canonical commands (`/help`, `/usage`); the completer and help output display alias matches as `/name (alias)` for clarity
