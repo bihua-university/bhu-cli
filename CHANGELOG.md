@@ -11,6 +11,8 @@ Only write entries that are worth mentioning to users.
 
 ## Unreleased
 
+- Tool: Add `EditFile` tool for line-range-based file editing — delete a span of lines and insert replacement text at the specified position, with automatic diff preview and approval
+
 - Core: Fix RTK default hook treating exit code 3 as failure — the real rtk binary returns exit 3 (not 0 as documented) when it successfully rewrites a command; previously any non-zero exit code was treated as failure, causing the hook to silently skip rewriting
 
 ## 1.46.0 (2026-05-22)
