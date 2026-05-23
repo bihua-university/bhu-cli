@@ -11,6 +11,8 @@ Only write entries that are worth mentioning to users.
 
 ## Unreleased
 
+- Core: Fix RTK default hook treating exit code 3 as failure — the real rtk binary returns exit 3 (not 0 as documented) when it successfully rewrites a command; previously any non-zero exit code was treated as failure, causing the hook to silently skip rewriting
+
 ## 1.46.0 (2026-05-22)
 
 - CI: Restore unsigned binary builds in release workflow — removed macOS code signing and notarization steps (no Apple Developer ID certificates configured in this fork) while keeping onefile/onedir binary builds and GitHub Release publishing for all platforms
