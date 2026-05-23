@@ -24,7 +24,10 @@ def main() -> None:
             timeout=5,
             check=False,
         )
-        if result.returncode != 0:
+        # rtk returns 0 or 3 when it has a rewritten equivalent, and 1 when
+        # the command is unsupported. Treat anything other than 0/3 as "no
+        # rewrite available" so we fail-open.
+        if result.returncode not in (0, 3):
             sys.exit(0)
         rewrite = result.stdout.strip()
     except Exception:
