@@ -13,7 +13,7 @@ def engine():
         HookDef(event="PreToolUse", matcher="ReadFile", command="exit 2", timeout=5),
         HookDef(event="Stop", matcher="", command="echo done", timeout=5),
     ]
-    return HookEngine(hooks)
+    return HookEngine(hooks, include_defaults=False)
 
 
 @pytest.mark.asyncio
@@ -66,7 +66,7 @@ async def test_invalid_regex_skips_hook():
     hooks = [
         HookDef(event="PreToolUse", matcher="[invalid", command="exit 0", timeout=5),
     ]
-    engine = HookEngine(hooks)
+    engine = HookEngine(hooks, include_defaults=False)
     # Should not raise, just skip the hook with invalid regex
     results = await engine.trigger("PreToolUse", matcher_value="Shell", input_data={})
     assert len(results) == 0
