@@ -91,6 +91,10 @@ def test_pyinstaller_datas():
         ("src/kimi_cli/tools/background/output.md", "kimi_cli/tools/background"),
         ("src/kimi_cli/tools/background/stop.md", "kimi_cli/tools/background"),
         (
+            "src/kimi_cli/tools/file/edit.md",
+            "kimi_cli/tools/file",
+        ),
+        (
             "src/kimi_cli/tools/file/glob.md",
             "kimi_cli/tools/file",
         ),
