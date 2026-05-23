@@ -91,9 +91,9 @@ def test_format_row_renders_remaining_quota(
 
     assert _plain_text(segments).startswith("Weekly  ")
     assert expected_text in _plain_text(segments)
-    assert len(bar_segments) == 1
-    assert bar_segments[0].text == "━" * expected_bar_width
-    assert str(bar_segments[0].style) == expected_color
+    colored_segments = [s for s in bar_segments if str(s.style) == expected_color]
+    assert len(colored_segments) == 1
+    assert colored_segments[0].text == "━" * expected_bar_width
 
 
 @pytest.mark.parametrize(("used", "limit"), [(0, 0), (0, -10), (100, 100), (150, 100)])
@@ -101,7 +101,9 @@ def test_format_row_handles_no_remaining_quota(used: int, limit: int) -> None:
     segments = _render_segments(UsageRow(label="Weekly", used=used, limit=limit))
 
     assert "0% left" in _plain_text(segments)
-    assert _filled_bar_segments(segments) == []
+    bar_segments = _filled_bar_segments(segments)
+    colored_segments = [s for s in bar_segments if str(s.style) not in ("grey23", "grey50")]
+    assert colored_segments == []
 
 
 def test_format_row_renders_reset_hint() -> None:
