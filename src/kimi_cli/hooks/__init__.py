@@ -1,3 +1,4 @@
+import os
 import shutil
 import sys
 from pathlib import Path
@@ -11,6 +12,8 @@ __all__ = ["HookDef", "HookEventType", "HOOK_EVENT_TYPES", "HookEngine"]
 def get_default_hooks() -> list[HookDef]:
     """Return default hooks that are auto-enabled when their dependencies are present."""
     hooks: list[HookDef] = []
+    if os.environ.get("KIMI_DISABLE_DEFAULT_HOOKS"):
+        return hooks
     if shutil.which("rtk"):
         rtk_path = Path(__file__).parent / "defaults" / "rtk.py"
         hooks.append(
