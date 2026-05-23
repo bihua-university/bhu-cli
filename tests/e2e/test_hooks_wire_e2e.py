@@ -116,6 +116,8 @@ def _start_wire(config_path: Path, work_dir: Path) -> subprocess.Popen[str]:
         "--work-dir",
         str(work_dir),
     ]
+    env = os.environ.copy()
+    env["KIMI_DISABLE_DEFAULT_HOOKS"] = "1"
     return subprocess.Popen(
         cmd,
         cwd=_repo_root(),
@@ -123,7 +125,7 @@ def _start_wire(config_path: Path, work_dir: Path) -> subprocess.Popen[str]:
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         text=True,
-        env=os.environ.copy(),
+        env=env,
     )
 
 
@@ -207,7 +209,7 @@ command = "echo done"
         configured = hooks.get("configured")
         assert isinstance(configured, dict)
         configured = cast(dict[str, object], configured)
-        assert configured.get("PreToolUse") == snapshot(2)
+        assert configured.get("PreToolUse") == snapshot(1)
         assert configured.get("Stop") == snapshot(1)
     finally:
         if process.stdin:
@@ -234,7 +236,7 @@ async def test_wire_hook_subscription_in_initialize(
         hooks_info = cast(dict[str, object], result.get("hooks", {}))
         configured = cast(dict[str, object], hooks_info.get("configured", {}))
         assert configured.get("PostToolUse") == snapshot(1)
-        assert configured.get("PreToolUse") == snapshot(2)
+        assert configured.get("PreToolUse") == snapshot(1)
     finally:
         if process.stdin:
             process.stdin.close()
