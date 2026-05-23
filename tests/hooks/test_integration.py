@@ -305,6 +305,7 @@ async def test_wire_callbacks_fired():
         hooks,
         on_triggered=lambda e, t, c: triggered.append((e, t, c)),
         on_resolved=lambda e, t, a, r, d: resolved.append((e, t, a)),
+        include_defaults=False,
     )
 
     await engine.trigger("PreToolUse", matcher_value="Shell", input_data={})
