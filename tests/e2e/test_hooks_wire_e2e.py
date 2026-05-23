@@ -206,7 +206,7 @@ command = "echo done"
         configured = hooks.get("configured")
         assert isinstance(configured, dict)
         configured = cast(dict[str, object], configured)
-        assert configured.get("PreToolUse") == 1
+        assert configured.get("PreToolUse") == 2
         assert configured.get("Stop") == 1
     finally:
         if process.stdin:
@@ -233,7 +233,7 @@ async def test_wire_hook_subscription_in_initialize(
         hooks_info = cast(dict[str, object], result.get("hooks", {}))
         configured = cast(dict[str, object], hooks_info.get("configured", {}))
         assert configured.get("PostToolUse") == 1
-        assert configured.get("PreToolUse") == 1
+        assert configured.get("PreToolUse") == 2
     finally:
         if process.stdin:
             process.stdin.close()
