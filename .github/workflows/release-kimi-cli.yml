@@ -284,12 +284,14 @@ jobs:
           cache-dependency-path: web/package-lock.json
 
       - name: Override package name for fork release
-        run: sed -i 's/^name = "kimi-cli"/name = "bhu-cli"/' pyproject.toml
+        run: |
+          sed -i 's/^name = "kimi-cli"/name = "bhu-cli"/' pyproject.toml
+          sed -i 's/kimi-cli = { workspace = true }/bhu-cli = { workspace = true }/' pyproject.toml
 
       - name: Build distributions
         run: |
           uv run scripts/inject_build_sha.py
-          uv build --package kimi-cli --no-sources --out-dir dist
+          uv build --package bhu-cli --no-sources --out-dir dist
 
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
