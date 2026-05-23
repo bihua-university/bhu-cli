@@ -15,6 +15,7 @@ import subprocess
 from pathlib import Path
 from typing import cast
 
+from inline_snapshot import snapshot
 from kaos.path import KaosPath
 
 
@@ -201,13 +202,13 @@ command = "echo done"
         assert isinstance(supported, list)
         assert "PreToolUse" in supported
         assert "Stop" in supported
-        assert len(supported) == 13
+        assert len(supported) == snapshot(13)
 
         configured = hooks.get("configured")
         assert isinstance(configured, dict)
         configured = cast(dict[str, object], configured)
-        assert configured.get("PreToolUse") == 2
-        assert configured.get("Stop") == 1
+        assert configured.get("PreToolUse") == snapshot(2)
+        assert configured.get("Stop") == snapshot(1)
     finally:
         if process.stdin:
             process.stdin.close()
@@ -232,8 +233,8 @@ async def test_wire_hook_subscription_in_initialize(
         )
         hooks_info = cast(dict[str, object], result.get("hooks", {}))
         configured = cast(dict[str, object], hooks_info.get("configured", {}))
-        assert configured.get("PostToolUse") == 1
-        assert configured.get("PreToolUse") == 2
+        assert configured.get("PostToolUse") == snapshot(1)
+        assert configured.get("PreToolUse") == snapshot(2)
     finally:
         if process.stdin:
             process.stdin.close()
@@ -272,7 +273,7 @@ command = "echo stop_hook_ok"
         resp, events = _prompt(process, "say hello")
 
         result = cast(dict[str, object], resp.get("result", {}))
-        assert result.get("status") == "finished"
+        assert result.get("status") == snapshot("finished")
 
         triggered = _find_events(events, "HookTriggered")
         resolved = _find_events(events, "HookResolved")
@@ -288,7 +289,7 @@ command = "echo stop_hook_ok"
 
         # All resolved should be "allow"
         for r in resolved:
-            assert r.get("action") == "allow", f"Unexpected block: {r}"
+            assert r.get("action") == snapshot("allow"), f"Unexpected block: {r}"
             assert isinstance(r.get("duration_ms"), int)
     finally:
         if process.stdin:
@@ -350,7 +351,7 @@ command = "echo stop_ok"
         resp, events = _prompt(process, "read test.txt")
 
         result = cast(dict[str, object], resp.get("result", {}))
-        assert result.get("status") == "finished"
+        assert result.get("status") == snapshot("finished")
 
         triggered = _find_events(events, "HookTriggered")
         resolved = _find_events(events, "HookResolved")
@@ -365,15 +366,15 @@ command = "echo stop_ok"
 
         # All should allow
         for r in resolved:
-            assert r.get("action") == "allow", f"Unexpected block: {r}"
+            assert r.get("action") == snapshot("allow"), f"Unexpected block: {r}"
 
         # PreToolUse target should be "ReadFile"
         pre_tool = [t for t in triggered if t.get("event") == "PreToolUse"]
-        assert pre_tool[0].get("target") == "ReadFile"
+        assert pre_tool[0].get("target") == snapshot("ReadFile")
 
         # PostToolUse target should also be "ReadFile"
         post_tool = [t for t in triggered if t.get("event") == "PostToolUse"]
-        assert post_tool[0].get("target") == "ReadFile"
+        assert post_tool[0].get("target") == snapshot("ReadFile")
     finally:
         if process.stdin:
             process.stdin.close()
@@ -422,13 +423,13 @@ timeout = 5
         resp, events = _prompt(process, "run echo hi")
 
         result = cast(dict[str, object], resp.get("result", {}))
-        assert result.get("status") == "finished"
+        assert result.get("status") == snapshot("finished")
 
         # Check HookResolved shows "block"
         resolved = _find_events(events, "HookResolved")
         pre_tool_resolved = [r for r in resolved if r.get("event") == "PreToolUse"]
         assert len(pre_tool_resolved) >= 1, f"No PreToolUse HookResolved: {resolved}"
-        assert pre_tool_resolved[0].get("action") == "block"
+        assert pre_tool_resolved[0].get("action") == snapshot("block")
         assert "blocked by hook" in str(pre_tool_resolved[0].get("reason", "")).lower()
 
         # The tool result should be an error (hook blocked it)
