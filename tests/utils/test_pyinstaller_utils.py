@@ -152,6 +152,7 @@ def test_pyinstaller_hiddenimports():
             "kimi_cli._build_info",
             "kimi_cli.cli.export",
             "kimi_cli.cli.info",
+            "kimi_cli.cli.marketplace",
             "kimi_cli.cli.mcp",
             "kimi_cli.cli.plugin",
             "kimi_cli.cli.vis",
