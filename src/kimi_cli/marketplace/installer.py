@@ -112,9 +112,9 @@ def validate_plugin(plugin_dir: Path, plugin_name: str) -> PluginValidationRepor
     # Skills (supported)
     skills_dir = _find_skills_dir(plugin_dir, spec.get("skills"))  # type: ignore[arg-type]
     if skills_dir is not None and skills_dir.is_dir():
-        report.skills = [
+        report.skills = sorted(
             p.name for p in skills_dir.iterdir() if p.is_dir() and (p / "SKILL.md").is_file()
-        ]
+        )
 
     # Helper to resolve a component path from spec or default
     def _resolve(spec_field: str | list[str] | None, default_name: str) -> Path | None:
