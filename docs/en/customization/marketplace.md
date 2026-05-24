@@ -37,8 +37,34 @@ kimi marketplace list
 Example output:
 
 ```
-  engineering-skills (cached)  –  https://github.com/acme/engineering-skills.git
-  my-marketplace (cached)      –  /path/to/local-marketplace
+engineering-skills
+  Status:   cached
+  Plugins:  2 plugin(s)
+  Source:   https://github.com/acme/engineering-skills.git
+  Inspect:  bhu marketplace list engineering-skills
+my-marketplace
+  Status:   cached
+  Plugins:  no plugins
+  Source:   /path/to/local-marketplace
+  Inspect:  bhu marketplace list my-marketplace
+```
+
+## Viewing Plugins in a Marketplace
+
+```sh
+kimi marketplace list engineering-skills
+```
+
+Example output:
+
+```
+Marketplace: engineering-skills
+  - senior-backend
+      Description: Backend development best practices
+      Install: kimi marketplace install senior-backend@engineering-skills
+  - frontend-style
+      Description: UI/UX guidelines
+      Install: kimi marketplace install frontend-style@engineering-skills
 ```
 
 ## Installing Plugin Skills
