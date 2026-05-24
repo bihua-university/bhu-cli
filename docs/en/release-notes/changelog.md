@@ -6,6 +6,13 @@ This page documents the changes in each Kimi Code CLI release.
 
 - Shell: Add local token usage statistics to `/usage` — shows This Week, This Month, and All Time aggregates with cache hit rates alongside API quota
 - Core: Track token usage locally in `~/.kimi/usage_stats.json` — records daily and all-time input, output, and cached token counts for offline usage analysis
+- CLI: Add `kimi marketplace` subcommand group for managing Claude Code-compatible skill marketplaces — supports `add`, `list`, `install`, `update`, and `remove` operations
+
+- Skill: Support installing community skills from Claude Code-compatible marketplaces via `kimi marketplace install <plugin>@<marketplace>` — skills are prefixed with the plugin name to avoid collisions
+
+- Skill: Add `command`-type skills that run as one-shot user prompts via `/command:<name>` — marketplace plugin commands are installed to `~/.kimi/commands/` and invoked like slash commands
+
+- MCP: Auto-load MCP server configs contributed by marketplace plugins from `~/.kimi/plugin-mcp.json` — server names are prefixed with the plugin name to prevent conflicts
 
 ## 1.47.0 (2026-05-23)
 
