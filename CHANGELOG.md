@@ -11,6 +11,10 @@ Only write entries that are worth mentioning to users.
 
 ## Unreleased
 
+## 1.49.0 (2026-05-24)
+
+- CI: Fixed release workflow to rewrite package metadata lookup in `constant.py` when publishing as `bhu-cli`.
+
 ## 1.48.0 (2026-05-24)
 
 - Shell: Add local token usage statistics to `/usage` — shows This Week, This Month, and All Time aggregates with cache hit rates alongside API quota
