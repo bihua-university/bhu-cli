@@ -62,7 +62,7 @@ class PluginValidationReport:
         _item("Commands", self.commands, "✅")
         _item("Agents", self.agents, "❌")
         _item("Hooks", self.hooks, "❌")
-        _item("MCP Servers", self.mcp_servers, "⚠️")
+        _item("MCP Servers", self.mcp_servers, "✅")
         _item("LSP Servers", self.lsp_servers, "❌")
         _item("Output Styles", self.output_styles, "❌")
         _item("Monitors", self.monitors, "❌")
