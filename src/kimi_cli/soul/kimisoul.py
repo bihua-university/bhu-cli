@@ -94,6 +94,7 @@ if TYPE_CHECKING:
 
 SKILL_COMMAND_PREFIX = "skill:"
 FLOW_COMMAND_PREFIX = "flow:"
+COMMAND_COMMAND_PREFIX = "command:"
 DEFAULT_MAX_FLOW_MOVES = 1000
 
 
@@ -783,6 +784,26 @@ class KimiSoul:
             )
             seen_names.add(command_name)
 
+        for skill in self._runtime.skills.values():
+            if skill.type != "command":
+                continue
+            name = f"{COMMAND_COMMAND_PREFIX}{skill.name}"
+            if name in seen_names:
+                logger.warning(
+                    "Skipping command slash command /{name}: name already registered",
+                    name=name,
+                )
+                continue
+            commands.append(
+                SlashCommand(
+                    name=name,
+                    func=self._make_command_runner(skill),
+                    description=skill.description or "",
+                    aliases=[],
+                )
+            )
+            seen_names.add(name)
+
         return commands
 
     @staticmethod
@@ -817,6 +838,29 @@ class KimiSoul:
 
         _run_skill.__doc__ = skill.description
         return _run_skill
+
+    def _make_command_runner(
+        self, skill: Skill
+    ) -> Callable[[KimiSoul, str], None | Awaitable[None]]:
+        async def _run_command(soul: KimiSoul, args: str, *, _skill: Skill = skill) -> None:
+            from kimi_cli.telemetry import track
+
+            track("command_invoked", command_name=_skill.name)
+            skill_text = await read_skill_text(_skill)
+            if skill_text is None:
+                wire_send(
+                    TextPart(
+                        text=f'Failed to load command "/{COMMAND_COMMAND_PREFIX}{_skill.name}".'
+                    )
+                )
+                return
+            extra = args.strip()
+            if extra:
+                skill_text = f"{skill_text}\n\nUser request:\n{extra}"
+            await soul._turn(Message(role="user", content=skill_text))
+
+        _run_command.__doc__ = skill.description
+        return _run_command
 
     async def _agent_loop(self) -> TurnOutcome:
         """The main agent loop for one run.

@@ -389,7 +389,7 @@ def kimi(
     from kimi_cli.ui.shell.startup import ShellStartupProgress
     from kimi_cli.utils.logging import logger, open_original_stderr, redirect_stderr_to_logger
 
-    from .mcp import get_global_mcp_config_file
+    from .mcp import get_global_mcp_config_file, get_plugin_mcp_config_file
 
     # Don't redirect stderr during argument parsing. Our stderr redirector
     # replaces fd=2 with a pipe, which would swallow Click/Typer startup errors.
@@ -520,6 +520,11 @@ def kimi(
         default_mcp_file = get_global_mcp_config_file()
         if default_mcp_file.exists():
             file_configs.append(default_mcp_file)
+
+    # Auto-load plugin MCP configs
+    plugin_mcp_file = get_plugin_mcp_config_file()
+    if plugin_mcp_file.exists():
+        file_configs.append(plugin_mcp_file)
 
     try:
         mcp_configs = [json.loads(conf.read_text(encoding="utf-8")) for conf in file_configs]
