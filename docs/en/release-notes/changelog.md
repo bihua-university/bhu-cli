@@ -14,8 +14,6 @@ This page documents the changes in each Kimi Code CLI release.
 
 - MCP: Auto-load MCP server configs contributed by marketplace plugins from `~/.kimi/plugin-mcp.json` — server names are prefixed with the plugin name to prevent conflicts
 
-## 1.48.0 (2026-05-24)
-
 ## 1.47.0 (2026-05-23)
 
 - CLI: Rename entry points from `kimi` / `kimi-cli` to `bhu` / `bhu-cli`
