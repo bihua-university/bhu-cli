@@ -4,6 +4,8 @@
 
 ## 未发布
 
+## 1.48.0 (2026-05-24)
+
 - Shell：`/usage` 新增本地 token 用量统计——展示本周、本月和全部的用量聚合数据，以及缓存命中率，与 API 配额并排显示
 - Core：在本地 `~/.kimi/usage_stats.json` 中记录 token 用量——按天和累计记录输入、输出和缓存 token 数量，支持离线用量分析
 - CLI：新增 `kimi marketplace` 子命令组，用于管理 Claude Code 兼容的 skill marketplace——支持 `add`、`list`、`install`、`update` 和 `remove` 操作
