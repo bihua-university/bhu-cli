@@ -4,15 +4,14 @@ This page documents the changes in each Kimi Code CLI release.
 
 ## Unreleased
 
+- Shell: Add local token usage statistics to `/usage` — shows This Week, This Month, and All Time aggregates with cache hit rates alongside API quota
+- Core: Track token usage locally in `~/.kimi/usage_stats.json` — records daily and all-time input, output, and cached token counts for offline usage analysis
+
+## 1.47.0 (2026-05-23)
+
+- CLI: Rename entry points from `kimi` / `kimi-cli` to `bhu` / `bhu-cli`
+
 - Tool: Add `EditFile` tool for line-range-based file editing — delete a span of lines and insert replacement text at the specified position, with automatic diff preview and approval
-
-- Core: Fix RTK default hook treating exit code 3 as failure — the real rtk binary returns exit 3 (not 0 as documented) when it successfully rewrites a command; previously any non-zero exit code was treated as failure, causing the hook to silently skip rewriting
-
-## 1.46.0 (2026-05-22)
-
-- CI: Restore unsigned binary builds in release workflow — removed macOS code signing and notarization steps (no Apple Developer ID certificates configured in this fork) while keeping onefile/onedir binary builds and GitHub Release publishing for all platforms
-
-## 1.45.0 (2026-05-22)
 
 - Core: Fix RTK default hook treating exit code 3 as failure — the real rtk binary returns exit 3 (not 0 as documented) when it successfully rewrites a command; previously any non-zero exit code was treated as failure, causing the hook to silently skip rewriting
 
