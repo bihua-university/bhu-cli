@@ -17,6 +17,8 @@ Kimi Code CLI 支持两种扩展机制：
 
 如需了解插件的详细信息，请参阅 [插件](./plugins.md) 文档。
 
+你也可以从 Claude Code 兼容的 **Skill 市场**直接安装社区维护的技能，无需手动创建。详见 [Skill 市场](./marketplace.md)。
+
 ## Skill 发现
 
 Kimi Code CLI 采用分层加载机制发现 Skills。当同名 Skill 存在于多个作用域时，越具体的作用域优先：

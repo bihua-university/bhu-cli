@@ -17,6 +17,8 @@ Kimi Code CLI supports two extension mechanisms:
 
 For details about plugins, see the [Plugins](./plugins.md) documentation.
 
+You can also install community-maintained skills directly from Claude Code-compatible **skill marketplaces** without creating them manually. See [Skill Marketplace](./marketplace.md) for details.
+
 ## Skill discovery
 
 Kimi Code CLI uses a layered loading mechanism to discover skills. Roots are scanned in priority order — when a skill name is defined in more than one scope, the more specific scope wins:
