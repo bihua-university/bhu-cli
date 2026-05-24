@@ -4,6 +4,8 @@
 
 ## 未发布
 
+- Shell：`/usage` 新增本地 token 用量统计——展示本周、本月和全部的用量聚合数据，以及缓存命中率，与 API 配额并排显示
+- Core：在本地 `~/.kimi/usage_stats.json` 中记录 token 用量——按天和累计记录输入、输出和缓存 token 数量，支持离线用量分析
 - Core：为 HookEngine 新增默认 hook 支持——当系统安装了 `rtk` 时，自动注册一个 PreToolUse hook，在执行前通过 RTK 重写 Shell 命令
 - Core：允许 PreToolUse hook 通过 `updatedInput` 修改工具输入参数——来自多个 hook 的重写结果会被聚合并应用到工具调用，下游工具将接收到更新后的参数
 - Core：修复 RTK 默认 hook 将退出码 3 误判为失败的问题——真实的 rtk 二进制文件在成功重写命令时返回退出码 3（而非文档所述的 0）；此前任何非零退出码都被视为失败，导致 hook 静默跳过重写

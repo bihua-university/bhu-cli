@@ -11,6 +11,9 @@ Only write entries that are worth mentioning to users.
 
 ## Unreleased
 
+- Shell: Add local token usage statistics to `/usage` — shows This Week, This Month, and All Time aggregates with cache hit rates alongside API quota
+- Core: Track token usage locally in `~/.kimi/usage_stats.json` — records daily and all-time input, output, and cached token counts for offline usage analysis
+
 ## 1.47.0 (2026-05-23)
 
 - CLI: Rename entry points from `kimi` / `kimi-cli` to `bhu` / `bhu-cli`
