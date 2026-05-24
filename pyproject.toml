@@ -73,6 +73,7 @@ kimi-cli = { workspace = true }
 [project.scripts]
 bhu = "kimi_cli.__main__:main"
 bhu-cli = "kimi_cli.__main__:main"
+kimi = "kimi_cli.__main__:main"
 
 [tool.ruff]
 line-length = 100
