@@ -11,6 +11,8 @@ Only write entries that are worth mentioning to users.
 
 ## Unreleased
 
+## 1.48.0 (2026-05-24)
+
 - Shell: Add local token usage statistics to `/usage` — shows This Week, This Month, and All Time aggregates with cache hit rates alongside API quota
 - Core: Track token usage locally in `~/.kimi/usage_stats.json` — records daily and all-time input, output, and cached token counts for offline usage analysis
 - CLI: Add `kimi marketplace` subcommand group for managing Claude Code-compatible skill marketplaces — supports `add`, `list`, `install`, `update`, and `remove` operations
