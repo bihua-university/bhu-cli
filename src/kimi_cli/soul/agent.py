@@ -23,9 +23,11 @@ from kimi_cli.notifications import NotificationManager
 from kimi_cli.session import Session
 from kimi_cli.skill import (
     Skill,
+    discover_skills,
     discover_skills_from_roots,
     format_skills_for_prompt,
     index_skills,
+    normalize_skill_name,
     resolve_skills_roots,
 )
 from kimi_cli.soul.approval import Approval, ApprovalState
@@ -237,7 +239,18 @@ class Runtime:
         skills = await discover_skills_from_roots(scoped_roots)
         skills_by_name = index_skills(skills)
         logger.info("Discovered {count} skill(s)", count=len(skills))
-        skills_formatted = format_skills_for_prompt(skills)
+
+        # Discover marketplace plugin commands (type="command")
+        commands_dir = KaosPath.home() / ".kimi" / "commands"
+        commands = await discover_skills(commands_dir, scope="user")
+        for cmd in commands:
+            cmd.type = "command"
+            key = normalize_skill_name(cmd.name)
+            if key not in skills_by_name:
+                skills_by_name[key] = cmd
+        logger.info("Discovered {count} command(s)", count=len(commands))
+
+        skills_formatted = format_skills_for_prompt(skills_by_name.values())
 
         # Restore additional directories from session state, pruning stale entries
         additional_dirs: list[KaosPath] = []

@@ -5,6 +5,7 @@ from typing import Annotated
 
 import typer
 
+from kimi_cli import logger
 from kimi_cli.marketplace import (
     MarketplaceError,
     MarketplaceSpec,
@@ -14,6 +15,8 @@ from kimi_cli.marketplace import (
     save_marketplace_registry,
 )
 from kimi_cli.marketplace.installer import (
+    install_plugin_commands,
+    install_plugin_mcp_servers,
     install_plugin_skills,
     validate_plugin,
 )
@@ -281,7 +284,7 @@ def install_cmd(
             raise typer.Exit(0)
 
     try:
-        installed, mcp_config = install_plugin_skills(
+        installed, _mcp_config = install_plugin_skills(
             plugin_dir,
             plugin_name=plugin_ref.split("@")[0] if "@" in plugin_ref else plugin_ref,
             marketplace_name=marketplace_name,
@@ -294,10 +297,36 @@ def install_cmd(
         else:
             typer.echo("Warning: No valid skills found in plugin.", err=True)
 
-        if mcp_config:
-            typer.echo(
-                f"\nNote: Plugin includes MCP server config at {mcp_config}\n"
-                "You can add it manually with: kimi mcp add --transport <type> <name> <command/url>"
+        # Merge plugin MCP servers into plugin-mcp.json
+        try:
+            mcp_added = install_plugin_mcp_servers(plugin_dir, plugin_name)
+            if mcp_added:
+                typer.echo(f"\nRegistered MCP server(s) from '{plugin_name}':")
+                for server_name in mcp_added:
+                    typer.echo(f"  - {server_name}")
+        except Exception as exc:
+            logger.warning(
+                "Failed to register MCP servers for '{plugin}': {exc}",
+                plugin=plugin_name,
+                exc=exc,
+            )
+
+        # Install plugin commands
+        try:
+            commands_added = install_plugin_commands(
+                plugin_dir,
+                plugin_name,
+                marketplace_name=marketplace_name,
+            )
+            if commands_added:
+                typer.echo(f"\nInstalled {len(commands_added)} command(s):")
+                for cmd_name in commands_added:
+                    typer.echo(f"  - {cmd_name}")
+        except Exception as exc:
+            logger.warning(
+                "Failed to install commands for '{plugin}': {exc}",
+                plugin=plugin_name,
+                exc=exc,
             )
     finally:
         if tmp_dir is not None:

@@ -14,6 +14,17 @@ def get_global_mcp_config_file() -> Path:
     return get_share_dir() / "mcp.json"
 
 
+def get_plugin_mcp_config_file() -> Path:
+    """Get the plugin MCP config file path.
+
+    This file stores MCP servers contributed by marketplace plugins,
+    separate from the user-managed global mcp.json.
+    """
+    from kimi_cli.share import get_share_dir
+
+    return get_share_dir() / "plugin-mcp.json"
+
+
 def _load_mcp_config() -> dict[str, Any]:
     """Load MCP config from global mcp config file."""
     from fastmcp.mcp_config import MCPConfig

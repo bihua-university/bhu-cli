@@ -3,6 +3,7 @@
 import shutil
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 import yaml
 
@@ -35,10 +36,8 @@ class PluginValidationReport:
     def has_unsupported(self) -> bool:
         return any(
             [
-                self.commands,
                 self.agents,
                 self.hooks,
-                self.mcp_servers,
                 self.lsp_servers,
                 self.output_styles,
                 self.monitors,
@@ -60,7 +59,7 @@ class PluginValidationReport:
                     lines.append(f"      - {item}")
 
         _item("Skills", self.skills, "✅")
-        _item("Commands", self.commands, "❌")
+        _item("Commands", self.commands, "✅")
         _item("Agents", self.agents, "❌")
         _item("Hooks", self.hooks, "❌")
         _item("MCP Servers", self.mcp_servers, "⚠️")
@@ -169,6 +168,82 @@ def validate_plugin(plugin_dir: Path, plugin_name: str) -> PluginValidationRepor
     return report
 
 
+def install_plugin_commands(
+    plugin_dir: Path,
+    plugin_name: str,
+    marketplace_name: str | None = None,
+) -> list[str]:
+    """Extract commands from a Claude Code plugin into bhu-cli's commands directory.
+
+    Commands are markdown files with frontmatter, installed as flat ``.md`` skills
+    under ``~/.kimi/commands/``.  Each command name is prefixed with the plugin
+    name to avoid collisions.
+
+    Returns the list of installed command names.
+    """
+    plugin_json = plugin_dir / ".claude-plugin" / "plugin.json"
+    if not plugin_json.exists():
+        plugin_json = plugin_dir / "plugin.json"
+
+    spec_commands: str | list[str] | None = None
+    if plugin_json.exists():
+        try:
+            spec = parse_claude_plugin_json(plugin_json)
+            spec_commands = spec.commands
+            if spec.name:
+                plugin_name = spec.name
+        except MarketplaceError:
+            pass
+
+    commands_dir: Path | None = None
+    if spec_commands is not None:
+        paths: list[str] = [spec_commands] if isinstance(spec_commands, str) else spec_commands
+        for p in paths:
+            candidate = (plugin_dir / p).resolve()
+            if candidate.is_dir() and candidate.is_relative_to(plugin_dir.resolve()):
+                commands_dir = candidate
+                break
+    else:
+        default = plugin_dir / "commands"
+        if default.is_dir():
+            commands_dir = default
+
+    if commands_dir is None:
+        return []
+
+    target_dir = get_share_dir() / "commands"
+    target_dir.mkdir(parents=True, exist_ok=True)
+
+    installed: list[str] = []
+    for cmd_file in commands_dir.iterdir():
+        if not cmd_file.is_file() or not cmd_file.name.lower().endswith(".md"):
+            continue
+
+        original_name = cmd_file.stem
+        new_name = f"{plugin_name}--{original_name}"
+        content = cmd_file.read_text(encoding="utf-8")
+        frontmatter = parse_frontmatter(content)
+        if frontmatter is not None:
+            frontmatter["name"] = new_name
+            dumped = yaml.safe_dump(frontmatter, allow_unicode=True, sort_keys=False)
+            body = strip_frontmatter(content)
+            content = f"---\n{dumped}---\n{body}"
+
+        target_file = target_dir / f"{new_name}.md"
+        target_file.write_text(content, encoding="utf-8")
+        installed.append(new_name)
+
+    if installed:
+        logger.info(
+            "Installed {count} command(s) from '{plugin}' to {path}",
+            count=len(installed),
+            plugin=plugin_name,
+            path=target_dir,
+        )
+
+    return installed
+
+
 def install_plugin_skills(
     plugin_dir: Path,
     plugin_name: str,
@@ -251,3 +326,107 @@ def install_plugin_skills(
                 break
 
     return installed, mcp_config
+
+
+def install_plugin_mcp_servers(
+    plugin_dir: Path,
+    plugin_name: str,
+) -> list[str]:
+    """Merge MCP servers from a plugin into ~/.kimi/plugin-mcp.json.
+
+    Server names are prefixed with the plugin name to avoid collisions.
+    Returns the list of server names that were added.
+    """
+    import json
+
+    from fastmcp.mcp_config import MCPConfig
+
+    # Locate MCP config file (same logic as install_plugin_skills)
+    plugin_json = plugin_dir / ".claude-plugin" / "plugin.json"
+    if not plugin_json.exists():
+        plugin_json = plugin_dir / "plugin.json"
+
+    spec_mcp: str | None = None
+    if plugin_json.exists():
+        try:
+            spec = parse_claude_plugin_json(plugin_json)
+            spec_mcp = spec.mcpServers
+            if spec.name:
+                plugin_name = spec.name
+        except MarketplaceError:
+            pass
+
+    mcp_file: Path | None = None
+    if spec_mcp is not None:
+        candidate = (plugin_dir / spec_mcp).resolve()
+        if candidate.is_file() and candidate.is_relative_to(plugin_dir.resolve()):
+            mcp_file = candidate
+    else:
+        for name in ("mcp-servers.json", "mcp.json", ".mcp.json"):
+            candidate = plugin_dir / name
+            if candidate.is_file():
+                mcp_file = candidate
+                break
+
+    if mcp_file is None:
+        return []
+
+    try:
+        raw = json.loads(mcp_file.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        logger.warning(
+            "Failed to read plugin MCP config from {path}: {exc}",
+            path=mcp_file,
+            exc=exc,
+        )
+        return []
+
+    try:
+        parsed = MCPConfig.model_validate(raw)
+    except Exception as exc:
+        logger.warning("Invalid MCP config in plugin {plugin}: {exc}", plugin=plugin_name, exc=exc)
+        return []
+
+    if not parsed.mcpServers:
+        return []
+
+    plugin_mcp_path = get_share_dir() / "plugin-mcp.json"
+    plugin_mcp_path.parent.mkdir(parents=True, exist_ok=True)
+
+    existing: dict[str, Any] = {}
+    if plugin_mcp_path.exists():
+        try:
+            existing = json.loads(plugin_mcp_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            existing = {}
+
+    if "mcpServers" not in existing:
+        existing["mcpServers"] = {}
+
+    added: list[str] = []
+    for server_name, server_config in parsed.mcpServers.items():
+        prefixed = f"{plugin_name}--{server_name}"
+        if prefixed in existing["mcpServers"]:
+            logger.warning(
+                "MCP server '{name}' from plugin '{plugin}' already exists in "
+                "plugin-mcp.json, skipping",
+                name=prefixed,
+                plugin=plugin_name,
+            )
+            continue
+        existing["mcpServers"][prefixed] = server_config.model_dump(exclude_none=True)
+        added.append(prefixed)
+
+    if added:
+        plugin_mcp_path.write_text(
+            json.dumps(existing, indent=2, ensure_ascii=False),
+            encoding="utf-8",
+        )
+        logger.info(
+            "Registered {count} MCP server(s) from '{plugin}' to {path}",
+            count=len(added),
+            plugin=plugin_name,
+            path=plugin_mcp_path,
+        )
+
+    return added

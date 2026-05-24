@@ -19,7 +19,7 @@ from kimi_cli.skill.flow.d2 import parse_d2_flowchart
 from kimi_cli.skill.flow.mermaid import parse_mermaid_flowchart
 from kimi_cli.utils.frontmatter import parse_frontmatter
 
-SkillType = Literal["standard", "flow"]
+SkillType = Literal["standard", "flow", "command"]
 
 SkillScope = Literal["builtin", "user", "project", "extra"]
 """Where a skill was discovered from.
@@ -370,6 +370,8 @@ def format_skills_for_prompt(skills: Iterable[Skill]) -> str:
     """
     grouped: dict[SkillScope, list[Skill]] = {s: [] for s, _ in _SCOPE_HEADINGS}
     for skill in skills:
+        if skill.type == "command":
+            continue
         grouped.setdefault(skill.scope, []).append(skill)
 
     sections: list[str] = []
@@ -583,7 +585,7 @@ def parse_skill_text(
         description = _truncate(body_fallback) if body_fallback else "No description provided."
 
     skill_type = frontmatter.get("type") or "standard"
-    if skill_type not in ("standard", "flow"):
+    if skill_type not in ("standard", "flow", "command"):
         raise ValueError(f'Invalid skill type "{skill_type}"')
     flow = None
     if skill_type == "flow":
