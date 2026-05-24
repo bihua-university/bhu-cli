@@ -288,6 +288,7 @@ jobs:
           sed -i 's/^name = "kimi-cli"/name = "bhu-cli"/' pyproject.toml
           sed -i 's/kimi-cli = { workspace = true }/bhu-cli = { workspace = true }/' pyproject.toml
           sed -i 's/kimi-cli==/bhu-cli==/' packages/kimi-code/pyproject.toml
+          sed -i 's/metadata.version("kimi-cli")/metadata.version("bhu-cli")/' src/kimi_cli/constant.py
 
       - name: Build distributions
         run: |
