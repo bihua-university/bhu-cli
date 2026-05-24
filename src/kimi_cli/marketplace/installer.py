@@ -220,9 +220,14 @@ def install_plugin_commands(
             continue
 
         original_name = cmd_file.stem
-        new_name = f"{plugin_name}--{original_name}"
         content = cmd_file.read_text(encoding="utf-8")
         frontmatter = parse_frontmatter(content)
+
+        # Use the original name when there is no collision; fall back to a
+        # prefixed name when another plugin already owns the command.
+        plain_target = target_dir / f"{original_name}.md"
+        new_name = f"{plugin_name}--{original_name}" if plain_target.exists() else original_name
+
         if frontmatter is not None:
             frontmatter["name"] = new_name
             dumped = yaml.safe_dump(frontmatter, allow_unicode=True, sort_keys=False)

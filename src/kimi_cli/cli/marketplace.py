@@ -25,6 +25,30 @@ from kimi_cli.marketplace.resolver import resolve_marketplace_source, resolve_pl
 cli = typer.Typer(help="Manage Claude Code-compatible skill marketplaces.")
 
 
+def _print_plugins(spec: MarketplaceSpec) -> None:
+    """Print plugin list for a marketplace spec."""
+    typer.echo(f"Marketplace: {spec.name}")
+    if not spec.plugins:
+        typer.echo("  No plugins available.")
+        return
+
+    for plugin in spec.plugins:
+        typer.echo(f"  - {plugin.name}")
+        if plugin.description:
+            typer.echo(f"      Description: {plugin.description}")
+        source_hint = ""
+        if isinstance(plugin.source, dict):
+            src_type = plugin.source.get("source", "directory")
+            if src_type == "github":
+                source_hint = f" (github: {plugin.source.get('repo', '')})"
+            elif src_type == "git":
+                source_hint = f" (git: {plugin.source.get('url', '')})"
+            elif src_type == "directory":
+                source_hint = f" (dir: {plugin.source.get('path', '')})"
+        install_cmd_text = f"kimi marketplace install {plugin.name}@{spec.name}{source_hint}"
+        typer.echo(f"      Install: {install_cmd_text}")
+
+
 def _get_marketplace_dir(name: str) -> Path:
     """Return the cache directory for a named marketplace."""
     return get_marketplaces_dir() / name
@@ -130,17 +154,83 @@ def add_cmd(
 
 
 @cli.command("list")
-def list_cmd() -> None:
-    """List registered marketplaces."""
+def list_cmd(
+    name: Annotated[
+        str | None,
+        typer.Argument(help="Marketplace name to inspect. Omit to list all marketplaces."),
+    ] = None,
+) -> None:
+    """List registered marketplaces and their plugins."""
     registry = load_marketplace_registry()
     if not registry:
         typer.echo("No marketplaces registered.")
         return
 
-    for name, source in sorted(registry.items()):
-        cache_dir = _get_marketplace_dir(name)
+    if name is not None:
+        # Name might be a registered marketplace or a raw source (GitHub shorthand, URL, path).
+        if name in registry:
+            try:
+                _, spec = _ensure_marketplace_spec(name)
+            except MarketplaceError as exc:
+                typer.echo(f"Error: {exc}", err=True)
+                raise typer.Exit(1) from exc
+            _print_plugins(spec)
+            return
+
+        # Try resolving as a raw source without registering.
+        import shutil
+
+        try:
+            local_dir, tmp_dir = resolve_marketplace_source(name)
+        except MarketplaceError:
+            typer.echo(f"Error: Marketplace '{name}' not found.", err=True)
+            raise typer.Exit(1) from None
+
+        try:
+            candidates = [
+                local_dir / ".claude-plugin" / "marketplace.json",
+                local_dir / "marketplace.json",
+            ]
+            marketplace_json: Path | None = None
+            for candidate in candidates:
+                if candidate.exists():
+                    marketplace_json = candidate
+                    break
+
+            if marketplace_json is None:
+                typer.echo(
+                    "Error: No marketplace.json found in source. "
+                    "Expected .claude-plugin/marketplace.json or marketplace.json",
+                    err=True,
+                )
+                raise typer.Exit(1)
+
+            spec = parse_marketplace_json(marketplace_json)
+            _print_plugins(spec)
+        finally:
+            if tmp_dir is not None:
+                shutil.rmtree(tmp_dir, ignore_errors=True)
+        return
+
+    # List all marketplaces with plugin counts
+    for mp_name, source in sorted(registry.items()):
+        cache_dir = _get_marketplace_dir(mp_name)
         status = "cached" if cache_dir.exists() else "missing"
-        typer.echo(f"  {name} ({status})  –  {source}")
+
+        count = 0
+        if cache_dir.exists():
+            try:
+                _, spec = _ensure_marketplace_spec(mp_name)
+                count = len(spec.plugins)
+            except MarketplaceError:
+                pass
+
+        count_text = f"{count} plugin(s)" if count else "no plugins"
+        typer.echo(f"{mp_name}")
+        typer.echo(f"  Status:   {status}")
+        typer.echo(f"  Plugins:  {count_text}")
+        typer.echo(f"  Source:   {source}")
+        typer.echo(f"  Inspect:  bhu marketplace list {mp_name}")
 
 
 @cli.command("remove")
