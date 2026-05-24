@@ -65,6 +65,7 @@ from kimi_cli.soul.slash import registry as soul_slash_registry
 from kimi_cli.soul.toolset import KimiToolset
 from kimi_cli.tools.dmail import NAME as SendDMail_NAME
 from kimi_cli.tools.utils import ToolRejectedError
+from kimi_cli.usage_tracker import record_usage
 from kimi_cli.utils.logging import logger
 from kimi_cli.utils.slashcmd import SlashCommand, parse_slash_command_call
 from kimi_cli.wire.file import WireFile
@@ -1241,6 +1242,7 @@ class KimiSoul:
         await self._context.append_message(result.message)
         if result.usage is not None:
             await self._context.update_token_count(result.usage.total)
+            record_usage(result.usage)
 
         logger.debug(
             "Appending tool messages to context: {tool_messages}", tool_messages=tool_messages

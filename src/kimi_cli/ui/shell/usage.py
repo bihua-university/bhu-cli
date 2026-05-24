@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, cast
 
 import aiohttp
@@ -19,6 +20,7 @@ from kimi_cli.config import LLMModel
 from kimi_cli.soul.kimisoul import KimiSoul
 from kimi_cli.ui.shell.console import console
 from kimi_cli.ui.shell.slash import registry
+from kimi_cli.usage_tracker import PeriodUsageEntry, load_usage_stats
 from kimi_cli.utils.aiohttp import new_client_session
 from kimi_cli.utils.datetime import format_duration
 
@@ -71,12 +73,23 @@ async def usage(app: Shell, args: str):
             console.print(f"[red]Failed to fetch usage: {e}[/red]")
             return
 
-    summary, limits = _parse_usage_payload(payload)
+    summary, limits, weekly_reset_at = _parse_usage_payload(payload)
     if summary is None and not limits:
         console.print("[yellow]No usage data available.[/yellow]")
         return
 
-    console.print(_build_usage_panel(summary, limits))
+    api_rows = ([summary] if summary else []) + limits
+    api_label_width = max(len(r.label) for r in api_rows) if api_rows else 6
+    api_label_width = max(api_label_width, 6)
+    common_label_width = max(api_label_width, 16)
+
+    console.print(_build_usage_panel(summary, limits, label_width=common_label_width))
+    local_panel = _build_local_usage_panel(
+        label_width=common_label_width,
+        weekly_reset_at=weekly_reset_at,
+    )
+    if local_panel is not None:
+        console.print(local_panel)
 
 
 def _usage_url(model: LLMModel | None) -> str | None:
@@ -106,14 +119,16 @@ async def _fetch_usage(url: str, api_key: str) -> Mapping[str, Any]:
 
 def _parse_usage_payload(
     payload: Mapping[str, Any],
-) -> tuple[UsageRow | None, list[UsageRow]]:
+) -> tuple[UsageRow | None, list[UsageRow], str | None]:
     summary: UsageRow | None = None
     limits: list[UsageRow] = []
+    weekly_reset_at: str | None = None
 
     usage = payload.get("usage")
     if isinstance(usage, Mapping):
         usage_map: Mapping[str, Any] = cast(Mapping[str, Any], usage)
         summary = _to_usage_row(usage_map, default_label="Weekly limit")
+        weekly_reset_at = _extract_reset_at(usage_map)
 
     raw_limits_obj = payload.get("limits")
     if isinstance(raw_limits_obj, Sequence):
@@ -136,7 +151,7 @@ def _parse_usage_payload(
             if row:
                 limits.append(row)
 
-    return summary, limits
+    return summary, limits, weekly_reset_at
 
 
 def _to_usage_row(data: Mapping[str, Any], *, default_label: str) -> UsageRow | None:
@@ -186,10 +201,17 @@ def _limit_label(
     return f"Limit #{idx + 1}"
 
 
-def _reset_hint(data: Mapping[str, Any]) -> str | None:
+def _extract_reset_at(data: Mapping[str, Any]) -> str | None:
     for key in ("reset_at", "resetAt", "reset_time", "resetTime"):
         if val := data.get(key):
-            return _format_reset_time(str(val))
+            return str(val)
+    return None
+
+
+def _reset_hint(data: Mapping[str, Any]) -> str | None:
+    raw = _extract_reset_at(data)
+    if raw:
+        return _format_reset_time(raw)
 
     for key in ("reset_in", "resetIn", "ttl", "window"):
         seconds = _to_int(data.get(key))
@@ -201,7 +223,6 @@ def _reset_hint(data: Mapping[str, Any]) -> str | None:
 
 def _format_reset_time(val: str) -> str:
     """Format ISO timestamp to a readable duration."""
-    from datetime import UTC, datetime
 
     try:
         # Parse ISO format like "2025-12-23T05:24:18.443553353Z"
@@ -228,7 +249,9 @@ def _to_int(value: Any) -> int | None:
         return None
 
 
-def _build_usage_panel(summary: UsageRow | None, limits: list[UsageRow]) -> Panel:
+def _build_usage_panel(
+    summary: UsageRow | None, limits: list[UsageRow], label_width: int | None = None
+) -> Panel:
     rows = ([summary] if summary else []) + limits
     if not rows:
         return Panel(
@@ -236,8 +259,9 @@ def _build_usage_panel(summary: UsageRow | None, limits: list[UsageRow]) -> Pane
         )
 
     # Calculate label width for alignment
-    label_width = max(len(r.label) for r in rows)
-    label_width = max(label_width, 6)  # minimum width
+    if label_width is None:
+        label_width = max(len(r.label) for r in rows)
+        label_width = max(label_width, 6)  # minimum width
 
     lines: list[RenderableType] = []
     for row in rows:
@@ -246,6 +270,149 @@ def _build_usage_panel(summary: UsageRow | None, limits: list[UsageRow]) -> Pane
     return Panel(
         Group(*lines),
         title="API Usage",
+        border_style="wheat4",
+        padding=(0, 2),
+        expand=False,
+    )
+
+
+def _build_local_usage_panel(
+    label_width: int = 16,
+    weekly_reset_at: str | None = None,
+) -> Panel | None:
+    from datetime import datetime, timedelta
+
+    stats = load_usage_stats()
+    all_time = stats.all_time
+
+    # Determine the week window and hint
+    week_reset_hint: str | None = None
+    if weekly_reset_at:
+        week_end = datetime.fromisoformat(weekly_reset_at.replace("Z", "+00:00"))
+        week_start = week_end - timedelta(days=7)
+        now = datetime.now(UTC)
+        delta = week_end - now
+        if delta.total_seconds() > 0:
+            week_reset_hint = f"resets in {format_duration(int(delta.total_seconds()))}"
+        else:
+            week_reset_hint = "reset"
+    else:
+        # No platform reset time: use a 7-day sliding window ending today
+        week_end = datetime.now(UTC)
+        week_start = week_end - timedelta(days=7)
+        week_reset_hint = f"{week_start.strftime('%m-%d')} → {week_end.strftime('%m-%d')}"
+
+    # Sum daily entries within the week window [week_start, week_end]
+    week_entry = PeriodUsageEntry()
+    current = week_end
+    while current >= week_start:
+        day_key = current.strftime("%Y-%m-%d")
+        entry = stats.by_day.get(day_key)
+        if entry:
+            week_entry.total += entry.total
+            week_entry.input += entry.input
+            week_entry.cached_input += entry.cached_input
+            week_entry.output += entry.output
+        current -= timedelta(days=1)
+
+    # Sum daily entries within this month [1st, today]
+    month_entry = PeriodUsageEntry()
+    today = datetime.now(UTC)
+    month_start = today.replace(day=1)
+    current = today
+    while current >= month_start:
+        day_key = current.strftime("%Y-%m-%d")
+        entry = stats.by_day.get(day_key)
+        if entry:
+            month_entry.total += entry.total
+            month_entry.input += entry.input
+            month_entry.cached_input += entry.cached_input
+            month_entry.output += entry.output
+        current -= timedelta(days=1)
+
+    def _row(label: str, value: int, style: str = "bold", reset_hint: str | None = None):
+        if value == 0:
+            return None
+        if value >= 1_000_000:
+            display = f"{value:,} ({value / 1_000_000:.2f}M)"
+        elif value >= 1000:
+            display = f"{value:,} ({value / 1000:.2f}k)"
+        else:
+            display = f"{value:,}"
+        text = Text()
+        text.append(f"{label:<{label_width}}  ", style="cyan")
+        text.append(display, style=style)
+        if reset_hint:
+            text.append(f"  ({reset_hint})", style="grey50")
+        return text
+
+    def _cache_row(label: str, cached: int, total_input: int):
+        if cached == 0:
+            return None
+        if cached >= 1_000_000:
+            display = f"{cached:,} ({cached / 1_000_000:.2f}M"
+        elif cached >= 1000:
+            display = f"{cached:,} ({cached / 1000:.2f}k"
+        else:
+            display = f"{cached:,} ("
+        if total_input > 0:
+            rate = cached / total_input * 100
+            display += f", {rate:.3f}%)"
+        else:
+            display += ")"
+        text = Text()
+        text.append(f"{label:<{label_width}}  ", style="cyan")
+        text.append(display, style="grey50")
+        return text
+
+    lines: list[RenderableType] = []
+    if week_entry.total > 0:
+        if (
+            row := _row(
+                "This Week",
+                week_entry.input + week_entry.output,
+                reset_hint=week_reset_hint,
+            )
+        ) is not None:
+            lines.append(row)
+        if week_entry.cached_input > 0:
+            cache_row = _cache_row(
+                "  Cache", week_entry.cached_input, week_entry.input + week_entry.cached_input
+            )
+            if cache_row is not None:
+                lines.append(cache_row)
+    if month_entry.total > 0:
+        month_hint = f"{month_start.strftime('%m-%d')} → {today.strftime('%m-%d')}"
+        if (
+            row := _row(
+                "This Month",
+                month_entry.input + month_entry.output,
+                reset_hint=month_hint,
+            )
+        ) is not None:
+            lines.append(row)
+        if month_entry.cached_input > 0:
+            cache_row = _cache_row(
+                "  Cache", month_entry.cached_input, month_entry.input + month_entry.cached_input
+            )
+            if cache_row is not None:
+                lines.append(cache_row)
+    if all_time.total > 0:
+        if (row := _row("All Time", all_time.input + all_time.output)) is not None:
+            lines.append(row)
+        if all_time.cached_input > 0:
+            cache_row = _cache_row(
+                "  Cache", all_time.cached_input, all_time.input + all_time.cached_input
+            )
+            if cache_row is not None:
+                lines.append(cache_row)
+
+    if not lines:
+        return None
+
+    return Panel(
+        Group(*lines),
+        title="Token Usage",
         border_style="wheat4",
         padding=(0, 2),
         expand=False,
