@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Awaitable, Callable, Iterable
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, Literal, cast
 
 from prompt_toolkit import PromptSession
 from prompt_toolkit.shortcuts.choice_input import ChoiceInput
@@ -472,6 +472,24 @@ async def _add_third_party_model(app: Shell, soul: KimiSoul, config: Config) -> 
         if effort_selection:
             thinking_effort = effort_selection
 
+    # Step 8c: Priority
+    priority_choices: list[tuple[str, str]] = [
+        ("high", "high (strongest reasoning)"),
+        ("medium", "medium (balanced)"),
+        ("low", "low (lightweight, good for compaction)"),
+    ]
+    try:
+        priority_selection = await ChoiceInput(
+            message="Select model priority (↑↓ navigate, Enter select, Ctrl+C cancel):",
+            options=priority_choices,
+            default="high",
+        ).prompt_async()
+    except (EOFError, KeyboardInterrupt):
+        return
+    priority: Literal["low", "medium", "high"] = cast(
+        Literal["low", "medium", "high"], priority_selection or "high"
+    )
+
     # Step 9: Display name
     display_name = await _prompt_text("Display name (optional, press Enter to skip)")
 
@@ -490,14 +508,13 @@ async def _add_third_party_model(app: Shell, soul: KimiSoul, config: Config) -> 
         base_url=base_url,
         api_key=SecretStr(api_key),
     )
-    from typing import cast
-
     model = LLMModel(
         provider=provider_alias,
         model=model_name,
         max_context_size=max_context_size,
         capabilities=cast("set[ModelCapability] | None", capabilities or None),
         thinking_effort=thinking_effort,
+        priority=priority,
         display_name=display_name or None,
     )
 
