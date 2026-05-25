@@ -68,6 +68,8 @@ class LLMModel(BaseModel):
     """Maximum context size (unit: tokens)"""
     capabilities: set[ModelCapability] | None = None
     """Model capabilities"""
+    thinking_effort: str | None = None
+    """Thinking effort level (low/medium/high/xhigh/max). Defaults to high when unset."""
     display_name: str | None = None
     """Human-readable model name (sourced from the provider's models API when available)"""
 

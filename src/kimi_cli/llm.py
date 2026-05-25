@@ -244,7 +244,10 @@ def create_llm(
         thinking is True and "thinking" in capabilities
     )
     if thinking_on:
-        chat_provider = chat_provider.with_thinking("high")
+        effort = model.thinking_effort or "high"
+        if effort not in {"off", "low", "medium", "high", "xhigh", "max"}:
+            effort = "high"
+        chat_provider = chat_provider.with_thinking(effort)  # type: ignore[arg-type]
     elif thinking is False:
         chat_provider = chat_provider.with_thinking("off")
     # If thinking is None and model doesn't always think, leave as-is (default behavior)
