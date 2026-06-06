@@ -470,7 +470,7 @@ class KimiToolset:
         await self.load_mcp_tools(mcp_configs, runtime, in_background=True)
         return True
 
-    def load_tools(self, tool_paths: list[str], dependencies: dict[type[Any], Any]) -> None:
+    async def load_tools(self, tool_paths: list[str], dependencies: dict[type[Any], Any]) -> None:
         """
         Load tools from paths like `kimi_cli.tools.shell:Shell`.
 
@@ -481,11 +481,21 @@ class KimiToolset:
         good_tools: list[str] = []
         bad_tools: list[str] = []
 
-        for tool_path in tool_paths:
-            try:
-                tool = self._load_tool(tool_path, dependencies)
-            except SkipThisTool:
+        async with asyncio.TaskGroup() as tg:
+            tasks = {
+                tool_path: tg.create_task(
+                    asyncio.to_thread(self._load_tool_safe, tool_path, dependencies)
+                )
+                for tool_path in tool_paths
+            }
+
+        for tool_path, task in tasks.items():
+            _, tool, error = task.result()
+            if isinstance(error, SkipThisTool):
                 logger.info("Skipping tool: {tool_path}", tool_path=tool_path)
+                continue
+            if error is not None:
+                bad_tools.append(tool_path)
                 continue
             if tool:
                 self.add(tool)
@@ -530,6 +540,19 @@ class KimiToolset:
                 args.append(dependencies[param.annotation])
         return tool_cls(*args)
 
+    @staticmethod
+    def _load_tool_safe(
+        tool_path: str, dependencies: dict[type[Any], Any]
+    ) -> tuple[str, ToolType | None, Exception | None]:
+        """Load a tool without raising, so it can be used inside asyncio.TaskGroup."""
+        try:
+            tool = KimiToolset._load_tool(tool_path, dependencies)
+            return tool_path, tool, None
+        except SkipThisTool:
+            return tool_path, None, SkipThisTool()
+        except Exception as exc:
+            return tool_path, None, exc
+
     # TODO(rc): remove `in_background` parameter and always load in background
     async def load_mcp_tools(
         self, mcp_configs: list[MCPConfig], runtime: Runtime, in_background: bool = True
@@ -571,6 +594,8 @@ class KimiToolset:
                 status="unauthorized", client=None, tools=[]
             )
 
+        _MCP_CONNECT_TIMEOUT = 15.0
+
         async def _connect_server(
             server_name: str, server_info: MCPServerInfo
         ) -> tuple[str, Exception | None]:
@@ -581,7 +606,10 @@ class KimiToolset:
             try:
                 assert server_info.client is not None
                 async with server_info.client as client:
-                    for tool in await client.list_tools():
+                    tools = await asyncio.wait_for(
+                        client.list_tools(), timeout=_MCP_CONNECT_TIMEOUT
+                    )
+                    for tool in tools:
                         server_info.tools.append(
                             MCPTool(server_name, tool, client, runtime=runtime)
                         )
@@ -592,6 +620,14 @@ class KimiToolset:
                 server_info.status = "connected"
                 logger.info("Connected MCP server: {server_name}", server_name=server_name)
                 return server_name, None
+            except TimeoutError as e:
+                logger.error(
+                    "MCP server connection timed out: {server_name} (>{timeout}s)",
+                    server_name=server_name,
+                    timeout=_MCP_CONNECT_TIMEOUT,
+                )
+                server_info.status = "failed"
+                return server_name, e
             except Exception as e:
                 logger.error(
                     "Failed to connect MCP server: {server_name}, error: {error}",
@@ -603,12 +639,12 @@ class KimiToolset:
 
         async def _connect():
             _toast_mcp("connecting to mcp servers...")
-            tasks = [
-                asyncio.create_task(_connect_server(server_name, server_info))
-                for server_name, server_info in self._mcp_servers.items()
-                if server_info.status == "pending"
-            ]
-            results = await asyncio.gather(*tasks) if tasks else []
+            tasks: list[asyncio.Task[tuple[str, Exception | None]]] = []
+            async with asyncio.TaskGroup() as tg:
+                for server_name, server_info in self._mcp_servers.items():
+                    if server_info.status == "pending":
+                        tasks.append(tg.create_task(_connect_server(server_name, server_info)))
+            results = [task.result() for task in tasks]
             failed_servers = {name: error for name, error in results if error is not None}
 
             for mcp_config in mcp_configs:

@@ -165,6 +165,16 @@ class OpenAILegacy:
     def with_thinking(self, effort: ThinkingEffort) -> Self:
         new_self = copy.copy(self)
         new_self._reasoning_effort = thinking_effort_to_reasoning_effort(effort)
+        new_self._generation_kwargs = copy.deepcopy(self._generation_kwargs)
+        old_extra_body: dict[str, Any] = new_self._generation_kwargs.get("extra_body") or {}
+        new_extra_body: dict[str, Any] = {
+            **old_extra_body,
+            "thinking": {"type": "enabled" if effort != "off" else "disabled"},
+        }
+        old_thinking: Any | None = old_extra_body.get("thinking")
+        if old_thinking is not None:
+            new_extra_body["thinking"] = {**old_thinking, **new_extra_body["thinking"]}
+        new_self._generation_kwargs["extra_body"] = new_extra_body
         return new_self
 
     def with_generation_kwargs(self, **kwargs: Unpack[GenerationKwargs]) -> Self:

@@ -1,9 +1,14 @@
-import mcp.types
+from typing import TYPE_CHECKING
 
 import kosong.message
 
+if TYPE_CHECKING:
+    import mcp.types
 
-def convert_mcp_content(part: mcp.types.ContentBlock) -> kosong.message.ContentPart:
+
+def convert_mcp_content(part: "mcp.types.ContentBlock") -> kosong.message.ContentPart:
+    import mcp.types
+
     """Convert MCP content block to kosong message content part.
 
     Raises:

@@ -2,14 +2,16 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Awaitable, Callable, Iterable
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, Literal, cast
 
+from prompt_toolkit import PromptSession
 from prompt_toolkit.shortcuts.choice_input import ChoiceInput
+from pydantic import SecretStr
 
 from kimi_cli import logger
 from kimi_cli.auth.platforms import get_platform_name_for_provider, refresh_managed_models
 from kimi_cli.cli import Reload, SwitchToVis, SwitchToWeb
-from kimi_cli.config import load_config, save_config
+from kimi_cli.config import Config, LLMModel, LLMProvider, load_config, save_config
 from kimi_cli.exception import ConfigError
 from kimi_cli.session import Session
 from kimi_cli.soul.kimisoul import KimiSoul
@@ -20,6 +22,7 @@ from kimi_cli.utils.changelog import CHANGELOG
 from kimi_cli.utils.slashcmd import SlashCommand, SlashCommandRegistry
 
 if TYPE_CHECKING:
+    from kimi_cli.llm import ModelCapability
     from kimi_cli.ui.shell import Shell
 
 type ShellSlashCmdFunc = Callable[[Shell, str], None | Awaitable[None]]
@@ -222,6 +225,7 @@ async def model(app: Shell, args: str):
         display = model_cfg.display_name or model_cfg.model
         label = f"{display} ({provider_label}){marker}"
         model_choices.append((name, label))
+    model_choices.append(("__add_3rd_party__", "Add 3rd-party model"))
 
     try:
         selected_model_name = await ChoiceInput(
@@ -235,6 +239,10 @@ async def model(app: Shell, args: str):
     if not selected_model_name:
         return
 
+    if selected_model_name == "__add_3rd_party__":
+        await _add_third_party_model(app, soul, config)
+        return
+
     selected_model_cfg = config.models[selected_model_name]
     selected_provider = config.providers.get(selected_model_cfg.provider)
     if selected_provider is None:
@@ -245,6 +253,7 @@ async def model(app: Shell, args: str):
     capabilities = derive_model_capabilities(selected_model_cfg)
     new_thinking: bool
 
+    new_effort: str | None = None
     if "always_thinking" in capabilities:
         new_thinking = True
     elif "thinking" in capabilities:
@@ -265,15 +274,39 @@ async def model(app: Shell, args: str):
             return
 
         new_thinking = thinking_selection == "on"
+
+        # Step 2b: Select thinking effort
+        if new_thinking:
+            current_effort = selected_model_cfg.thinking_effort or "high"
+            effort_choices: list[tuple[str, str]] = [
+                ("low", "low" + (" (current)" if current_effort == "low" else "")),
+                ("medium", "medium" + (" (current)" if current_effort == "medium" else "")),
+                ("high", "high" + (" (current)" if current_effort == "high" else "")),
+                ("xhigh", "xhigh" + (" (current)" if current_effort == "xhigh" else "")),
+                ("max", "max" + (" (current)" if current_effort == "max" else "")),
+            ]
+            try:
+                effort_selection = await ChoiceInput(
+                    message="Select thinking effort (↑↓ navigate, Enter select, Ctrl+C cancel):",
+                    options=effort_choices,
+                    default=current_effort,
+                ).prompt_async()
+            except (EOFError, KeyboardInterrupt):
+                return
+            if effort_selection:
+                new_effort = effort_selection
     else:
         new_thinking = False
 
     # Check if anything changed
     model_changed = curr_model_name != selected_model_name
     thinking_changed = curr_thinking != new_thinking
+    effort_changed = new_effort is not None and new_effort != (
+        selected_model_cfg.thinking_effort or "high"
+    )
     selected_display = selected_model_cfg.display_name or selected_model_cfg.model
 
-    if not model_changed and not thinking_changed:
+    if not model_changed and not thinking_changed and not effort_changed:
         console.print(
             f"[yellow]Already using {selected_display} "
             f"with thinking {'on' if new_thinking else 'off'}.[/yellow]"
@@ -283,16 +316,22 @@ async def model(app: Shell, args: str):
     # Save and reload
     prev_model = config.default_model
     prev_thinking = config.default_thinking
+    prev_effort = selected_model_cfg.thinking_effort
     config.default_model = selected_model_name
     config.default_thinking = new_thinking
+    if new_effort is not None:
+        selected_model_cfg.thinking_effort = new_effort
     try:
         config_for_save = load_config()
         config_for_save.default_model = selected_model_name
         config_for_save.default_thinking = new_thinking
+        if new_effort is not None:
+            config_for_save.models[selected_model_name].thinking_effort = new_effort
         save_config(config_for_save)
     except (ConfigError, OSError) as exc:
         config.default_model = prev_model
         config.default_thinking = prev_thinking
+        selected_model_cfg.thinking_effort = prev_effort
         console.print(f"[red]Failed to save config: {exc}[/red]")
         return
 
@@ -308,6 +347,195 @@ async def model(app: Shell, args: str):
         "Reloading...[/green]"
     )
     raise Reload(session_id=soul.runtime.session.id)
+
+
+async def _prompt_text(prompt: str, *, default: str = "", is_password: bool = False) -> str | None:
+    session = PromptSession[str]()
+    try:
+        return str(
+            await session.prompt_async(
+                f" {prompt}: ",
+                default=default,
+                is_password=is_password,
+            )
+        ).strip()
+    except (EOFError, KeyboardInterrupt):
+        return None
+
+
+async def _add_third_party_model(app: Shell, soul: KimiSoul, config: Config) -> None:
+    """Interactive wizard to add a 3rd-party model to the config."""
+    from kimi_cli.llm import ALL_MODEL_CAPABILITIES
+
+    THIRD_PARTY_PROVIDERS: list[tuple[str, str]] = [
+        ("openai_legacy", "OpenAI (Legacy Chat Completions)"),
+        ("openai_responses", "OpenAI (Responses API)"),
+        ("anthropic", "Anthropic"),
+        ("gemini", "Google Gemini"),
+        ("vertexai", "Google Vertex AI"),
+    ]
+
+    default_base_urls: dict[str, str] = {
+        "openai_legacy": "https://api.openai.com/v1",
+        "openai_responses": "https://api.openai.com/v1",
+        "anthropic": "https://api.anthropic.com",
+        "gemini": "https://generativelanguage.googleapis.com/v1beta",
+        "vertexai": "",
+    }
+
+    # Step 1: Provider type
+    provider_type = await ChoiceInput(
+        message="Select provider type (↑↓ navigate, Enter select, Ctrl+C cancel):",
+        options=THIRD_PARTY_PROVIDERS,
+        default="openai_legacy",
+    ).prompt_async()
+    if not provider_type:
+        return
+
+    # Step 2: Provider alias
+    default_alias = f"my-{provider_type.replace('_', '-')}"
+    provider_alias = await _prompt_text("Provider alias", default=default_alias)
+    if not provider_alias:
+        return
+    if provider_alias in config.providers:
+        console.print(f"[red]Provider alias '{provider_alias}' already exists.[/red]")
+        return
+
+    # Step 3: Base URL
+    base_url = await _prompt_text("Base URL", default=default_base_urls.get(provider_type, ""))
+    if not base_url:
+        console.print("[red]Base URL is required.[/red]")
+        return
+
+    # Step 4: API key
+    api_key = await _prompt_text("API key", is_password=True)
+    if not api_key:
+        console.print("[red]API key is required.[/red]")
+        return
+
+    # Step 5: Model name
+    model_name = await _prompt_text("Model name (as used by the API)")
+    if not model_name:
+        console.print("[red]Model name is required.[/red]")
+        return
+
+    # Step 6: Model alias
+    default_model_alias = model_name.replace("/", "-").replace(":", "-")
+    model_alias = await _prompt_text("Model alias", default=default_model_alias)
+    if not model_alias:
+        return
+    if model_alias in config.models:
+        console.print(f"[red]Model alias '{model_alias}' already exists.[/red]")
+        return
+
+    # Step 7: Max context size
+    max_context_str = await _prompt_text("Max context size (tokens)", default="128000")
+    try:
+        max_context_size = int(max_context_str) if max_context_str else 128000
+    except ValueError:
+        console.print("[yellow]Invalid number, using 128000.[/yellow]")
+        max_context_size = 128000
+
+    # Step 8: Capabilities
+    capabilities: set[str] = set()
+    remaining_caps: list[str] = sorted(ALL_MODEL_CAPABILITIES)
+    while remaining_caps:
+        cap_options = [(c, c) for c in remaining_caps] + [("done", "Done")]
+        cap_choice = await ChoiceInput(
+            message="Select capabilities (↑↓ navigate, Enter select, Ctrl+C finish):",
+            options=cap_options,
+            default="done",
+        ).prompt_async()
+        if not cap_choice or cap_choice == "done":
+            break
+        capabilities.add(cap_choice)
+        remaining_caps = [c for c in remaining_caps if c != cap_choice]
+
+    # Step 8b: Thinking effort
+    thinking_effort: str | None = None
+    if capabilities & {"thinking", "always_thinking"}:
+        effort_choices: list[tuple[str, str]] = [
+            ("low", "low"),
+            ("medium", "medium"),
+            ("high", "high"),
+            ("xhigh", "xhigh"),
+            ("max", "max"),
+        ]
+        try:
+            effort_selection = await ChoiceInput(
+                message="Select thinking effort (↑↓ navigate, Enter select, Ctrl+C cancel):",
+                options=effort_choices,
+                default="high",
+            ).prompt_async()
+        except (EOFError, KeyboardInterrupt):
+            return
+        if effort_selection:
+            thinking_effort = effort_selection
+
+    # Step 8c: Priority
+    priority_choices: list[tuple[str, str]] = [
+        ("high", "high (strongest reasoning)"),
+        ("medium", "medium (balanced)"),
+        ("low", "low (lightweight, good for compaction)"),
+    ]
+    try:
+        priority_selection = await ChoiceInput(
+            message="Select model priority (↑↓ navigate, Enter select, Ctrl+C cancel):",
+            options=priority_choices,
+            default="high",
+        ).prompt_async()
+    except (EOFError, KeyboardInterrupt):
+        return
+    priority: Literal["low", "medium", "high"] = cast(
+        Literal["low", "medium", "high"], priority_selection or "high"
+    )
+
+    # Step 9: Display name
+    display_name = await _prompt_text("Display name (optional, press Enter to skip)")
+
+    # Step 10: Set as default?
+    set_default = False
+    default_choice = await ChoiceInput(
+        message="Set as default model?",
+        options=[("yes", "Yes"), ("no", "No")],
+        default="yes" if not config.default_model else "no",
+    ).prompt_async()
+    set_default = default_choice == "yes"
+
+    # Build config objects
+    provider = LLMProvider(
+        type=provider_type,  # type: ignore[arg-type]
+        base_url=base_url,
+        api_key=SecretStr(api_key),
+    )
+    model = LLMModel(
+        provider=provider_alias,
+        model=model_name,
+        max_context_size=max_context_size,
+        capabilities=cast("set[ModelCapability] | None", capabilities or None),
+        thinking_effort=thinking_effort,
+        priority=priority,
+        display_name=display_name or None,
+    )
+
+    try:
+        config_for_save = load_config()
+        config_for_save.providers[provider_alias] = provider
+        config_for_save.models[model_alias] = model
+        if set_default:
+            config_for_save.default_model = model_alias
+            config_for_save.default_thinking = bool(capabilities & {"thinking", "always_thinking"})
+        save_config(config_for_save)
+    except (ConfigError, OSError) as exc:
+        console.print(f"[red]Failed to save config: {exc}[/red]")
+        return
+
+    console.print(f"[green]✓ Added {display_name or model_name} ({provider_type})[/green]")
+    if set_default:
+        console.print("[green]Set as default model. Reloading...[/green]")
+        raise Reload(session_id=soul.runtime.session.id)
+    else:
+        console.print("[green]Send /model to switch to it.[/green]")
 
 
 @registry.command
