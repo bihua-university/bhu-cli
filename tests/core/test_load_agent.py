@@ -131,11 +131,11 @@ def test_load_system_prompt_missing_arg_raises(builtin_args: BuiltinSystemPrompt
             _load_system_prompt(system_md, {}, builtin_args)
 
 
-def test_load_tools_valid(runtime: Runtime):
+async def test_load_tools_valid(runtime: Runtime):
     """Test loading valid tools."""
     tool_paths = ["kimi_cli.tools.think:Think", "kimi_cli.tools.shell:Shell"]
     toolset = KimiToolset()
-    toolset.load_tools(
+    await toolset.load_tools(
         tool_paths,
         {
             Runtime: runtime,
@@ -150,12 +150,12 @@ def test_load_tools_valid(runtime: Runtime):
     assert len(toolset.tools) == snapshot(2)
 
 
-def test_load_tools_invalid(runtime: Runtime):
+async def test_load_tools_invalid(runtime: Runtime):
     """Test loading with invalid tool paths."""
     tool_paths = ["kimi_cli.tools.nonexistent:Tool", "kimi_cli.tools.think:Think"]
     toolset = KimiToolset()
     try:
-        toolset.load_tools(
+        await toolset.load_tools(
             tool_paths,
             {
                 Runtime: runtime,
